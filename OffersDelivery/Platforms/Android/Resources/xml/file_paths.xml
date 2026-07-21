@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://android.com">
+	<!-- Allows the PDF view to read cached PDF files downloaded from the web -->
+	<external-path name="external_files" path="." />
+	<cache-path name="cache_files" path="." />
+	<files-path name="internal_files" path="." />
+</paths>

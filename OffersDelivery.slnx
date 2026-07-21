@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="OffersDelivery.Core/OffersDelivery.Core.csproj" />
+  <Project Path="OffersDelivery/OffersDelivery.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+</Solution>

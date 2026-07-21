@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pdf="http://eightbot.com/maui/pdfview"
+             x:Class="OffersDelivery.OffersPage"
+             Title="OffersPage">
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Compartilhar"
+                     Order="Secondary"
+                     Clicked="OnShareClicked"/>
+    </ContentPage.ToolbarItems>
+    <Grid>
+
+        <pdf:PdfView
+            x:Name="pdfViewer"
+            HorizontalOptions="Fill"
+            VerticalOptions="Fill"
+            EnableZoom="True"
+            EnableSwipe="True"
+            EnableLinkNavigation="True"
+            EnableAnnotationRendering="True"
+            IsVisible="False"/>
+
+        <CollectionView
+        x:Name="imageViewer"
+        IsVisible="False"
+        ItemsLayout="VerticalList">
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+
+                    <Image
+                    Margin="0,0,0,10"
+                    Aspect="AspectFit"
+                    Source="{Binding}">
+                    </Image>
+
+
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
+
+        <Grid x:Name="LoadingOverlay" 
+          BackgroundColor="#80000000"
+          IsVisible="False"
+          InputTransparent="False">
+
+            <VerticalStackLayout HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             Spacing="20">
+
+                <ActivityIndicator IsRunning="True"
+                               Color="White"
+                               WidthRequest="60"
+                               HeightRequest="60" />
+
+                <Label Text="Carregando..."
+                   TextColor="White"
+                   FontSize="18" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <Grid
+        VerticalOptions="End"
+        HorizontalOptions="Fill"
+        Padding="0,0,0,20"
+        x:Name="Controls">
+
+            <Border
+            HorizontalOptions="Center"
+            Padding="12"
+            BackgroundColor="#CC000000"
+            StrokeThickness="0"
+            StrokeShape="RoundRectangle 30">
+
+                <HorizontalStackLayout Spacing="12">
+
+                    <Button Text="◀" Clicked="OnPreviousPage"/>
+                    <Button Text="-" Clicked="OnZoomOut"/>
+                    <Button Text="+" Clicked="OnZoomIn"/>
+                    <Button Text="▶" Clicked="OnNextPage"/>
+
+                </HorizontalStackLayout>
+
+            </Border>
+
+        </Grid>
+    </Grid>
+</ContentPage>
