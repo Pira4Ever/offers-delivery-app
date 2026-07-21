@@ -5,6 +5,7 @@ using OffersDelivery.Core.Repositories;
 using System.Net;
 using System.Net.Security;
 using CommunityToolkit.Maui;
+using OffersDelivery.Core.Services;
 
 namespace OffersDelivery
 {
@@ -52,6 +53,7 @@ namespace OffersDelivery
 
                 return client;
             });
+            builder.Services.AddSingleton<UpdateService>();
             builder.Services.AddSingleton<OfferRepository>();
             builder.Services.AddSingleton<ApiClient>();
 #if DEBUG

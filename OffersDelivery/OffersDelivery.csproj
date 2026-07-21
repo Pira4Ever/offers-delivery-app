@@ -11,7 +11,7 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>OffersDelivery</ApplicationTitle>
+		<ApplicationTitle>Salto Ofertas</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.companyname.offersdelivery</ApplicationId>

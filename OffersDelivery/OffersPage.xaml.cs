@@ -216,39 +216,56 @@ public partial class OffersPage : ContentPage
 
     private async void OnShareClicked(object sender, EventArgs e)
     {
-        string originalPath;
-        string extension;
         if (offers![index].Type == "pdf")
         {
-            originalPath = Path.Combine(FileSystem.CacheDirectory, HashUrl(offers![index].Url) + ".pdf");
-            extension = ".pdf";
+            string originalPath = Path.Combine(FileSystem.CacheDirectory, HashUrl(offers![index].Url) + ".pdf");
+            string newPath = Path.Combine(FileSystem.CacheDirectory, $"Ofertas - {_marketName}.pdf");
+            try
+            {
+                File.Copy(originalPath, newPath, overwrite: true);
+
+                await Share.Default.RequestAsync(new ShareFileRequest
+                {
+                    Title = "Compartilhar Ofertas",
+                    File = new ShareFile(newPath)
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex}");
+            }
         }
         else
         {
-            var hash = HashUrl(offers![index].Url);
-
-            extension = Path.GetExtension(new Uri(offers![index].Url).AbsolutePath);
-            if (string.IsNullOrWhiteSpace(extension))
-                extension = ".jpg";
-
-            var fileName = $"{hash}{extension}";
-            originalPath = Path.Combine(FileSystem.CacheDirectory, fileName);
-        }
-        string newPath = Path.Combine(FileSystem.CacheDirectory, $"Ofertas - {_marketName}{extension}");
-
-        try
-        {
-            File.Copy(originalPath, newPath, overwrite: true);
-
-            await Share.Default.RequestAsync(new ShareFileRequest
+            List<ShareFile> files = [];
+            int counter = 1;
+            foreach (string url in offers![index].Pages)
             {
-                Title = "Compartilhar Oferta",
-                File = new ShareFile(newPath)
-            });
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error: {ex}");
+                var hash = HashUrl(url);
+
+                string extension = Path.GetExtension(new Uri(url).AbsolutePath);
+                if (string.IsNullOrWhiteSpace(extension))
+                    extension = ".jpg";
+
+                var fileName = $"{hash}{extension}";
+                string originalPath = Path.Combine(FileSystem.CacheDirectory, fileName);
+                string newPath = Path.Combine(FileSystem.CacheDirectory, $"Ofertas - {_marketName}-{counter}{extension}");
+                File.Copy(originalPath, newPath, overwrite: true);
+                files.Add(new ShareFile(newPath));
+                counter++;
+            }
+            try
+            {
+                await Share.Default.RequestAsync(new ShareMultipleFilesRequest
+                {
+                    Title = "Compartilhar Ofertas",
+                    Files = files
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error: {ex}");
+            }
         }
     }
 }
