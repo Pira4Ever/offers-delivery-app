@@ -17,7 +17,7 @@
 		<ApplicationId>com.octavio.offersdelivery</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>1.1</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<WindowsPackageType>None</WindowsPackageType>
@@ -59,6 +59,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <MauiImage Include="..\..\..\..\Downloads\delta.png" Link="Resources\Images\delta.png" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<MauiFont Include="Resources\AppIcon\appicon.png" />
 	</ItemGroup>
 
@@ -84,9 +88,6 @@
 
 	<ItemGroup>
 		<MauiXaml Update="OffersPage.xaml">
-			<Generator>MSBuild:Compile</Generator>
-		</MauiXaml>
-		<MauiXaml Update="Popups\LoadingPopup.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
 	</ItemGroup>

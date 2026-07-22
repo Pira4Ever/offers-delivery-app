@@ -6,7 +6,7 @@ namespace OffersDelivery.Core.Models;
 public class OfferModel
 {
     [PrimaryKey, Column("Id")]
-    public string Id { get; set; }
+    public string Id { get; set; } = "";
 
     [Column("Market")]
     public int Market { get; set; }
@@ -15,14 +15,14 @@ public class OfferModel
     public int Type { get; set; }
 
     [Column("Url")]
-    public string Url { get; set; }
+    public string Url { get; set; } = "";
 
     [Column("DueDate")]
-    public string DueDate { get; set; }
+    public string DueDate { get; set; } = "";
 
     [Column("PageOrder")]
     public int PageOrder { get; set; }
 
     [Column("OfferGroup")]
-    public string OfferGroup { get; set; }
+    public string? OfferGroup { get; set; }
 }

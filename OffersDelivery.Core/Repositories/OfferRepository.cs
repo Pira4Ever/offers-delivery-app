@@ -24,6 +24,7 @@ public class OfferRepository
             Market.PAGUE_MENOS => 1,
             Market.SAO_VICENTE => 2,
             Market.TENDA => 3,
+            Market.DELTA => 4,
             _ => throw new NotImplementedException()
         };
     }

@@ -1,26 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace OffersDelivery.Core.Dtos;
 
 public class TendaApiResponse
 {
     [JsonPropertyName("Data")]
-    public List<TendaMarket> Data { get; set; }
+    public required List<TendaMarket> Data { get; set; }
 }
 
 public class TendaMarket
 {
     [JsonPropertyName("branch")]
-    public TendaBranch Branch { get; set; }
+    public required TendaBranch Branch { get; set; }
 
     [JsonPropertyName("endDate")]
     public string EndDate { get; set; } = string.Empty;
 
     [JsonPropertyName("pages")]
-    public List<TendaPage> Pages { get; set; }
+    public required List<TendaPage> Pages { get; set; }
 }
 
 public class TendaBranch

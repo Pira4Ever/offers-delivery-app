@@ -1,6 +1,5 @@
 ﻿#if ANDROID
 using Android.Content;
-using AndroidX.Core.Content;
 #endif
 
 namespace OffersDelivery.Core.Services;

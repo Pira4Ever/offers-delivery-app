@@ -24,6 +24,7 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
         markets.Add(new GetMarketsResponseDto { EncodedName = "SAO_VICENTE", Name = "São Vicente", Url = "sao_vicente.png" });
         markets.Add(new GetMarketsResponseDto { EncodedName = "PAGUE_MENOS", Name = "Pague Menos", Url = "pague_menos.jpg" });
         markets.Add(new GetMarketsResponseDto { EncodedName = "TENDA", Name = "Tenda Atacado", Url = "tenda.png" });
+        markets.Add(new GetMarketsResponseDto { EncodedName = "DELTA", Name = "Delta Supermercados", Url = "delta.png" });
         return markets;
     }
 
@@ -44,6 +45,10 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                             Success: response => response
                             ),
             "TENDA" => (await ScrapTenda()).Match(
+                            Exception: ex => throw ex,
+                            Success: response => response
+                            ),
+            "DELTA" => (await ScrapDelta()).Match(
                             Exception: ex => throw ex,
                             Success: response => response
                             ),
@@ -345,7 +350,100 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                 {
                     DueDate = DateTime.Parse(item.DueDate),
                     Type = item.Type == 0 ? "pdf" : "image",
-                    OfferGroup = item.OfferGroup,
+                    OfferGroup = item.OfferGroup!,
+                    Pages = [.. item.Url.Split(',')]
+                });
+            }
+
+            return offers;
+        }
+    }
+
+    private async Task<Exceptional<List<GetOffersResponseDto>>> ScrapDelta()
+    {
+        var lastUpdate = Preferences.Default.Get("last_delta", DateTime.Now.AddHours(-2));
+        if (DateTime.Now >= lastUpdate.AddHours(1) && Connectivity.Current.NetworkAccess == Microsoft.Maui.Networking.NetworkAccess.Internet)
+        {
+            try
+            {
+                var resp = await _httpClient.GetAsync(@"https://www.deltasuper.com.br/ofertas-salto/");
+                if (!resp.IsSuccessStatusCode) return new List<GetOffersResponseDto>();
+                var html = await resp.Content.ReadAsStringAsync();
+                var context = BrowsingContext.New(Configuration.Default);
+                var doc = await context.OpenAsync(req => req.Content(html));
+                List<GetOffersResponseDto> offers = [];
+                List<OfferModel> offerModels = [];
+                foreach (var item in doc.QuerySelectorAll(".jet-listing-grid__items")[0].Children)
+                {
+                    string dueDate;
+                    DateTime date;
+                    var regex = DateRegex().Matches(item.QuerySelectorAll("h2")[item.QuerySelectorAll("h2").Count - 1].TextContent.ToLower());
+                    if (regex.Count == 0) date = DateTime.Now.AddDays(5).Date;
+                    else
+                    {
+                        dueDate = regex[0].Value;
+                        date = DateTime.ParseExact(dueDate, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None);
+                    }
+                    
+                    dueDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    var link = item.GetElementsByTagName("a")[0].GetAttribute("href")!;
+
+                    var response = await _httpClient.GetAsync(link);
+                    var html1 = await response.Content.ReadAsStringAsync();
+                    var doc1 = await context.OpenAsync(req => req.Content(html1));
+
+                    List<string> pages = [];
+                    string id = Guid.NewGuid().ToString();
+                    int counter = 0;
+                    foreach (var item1 in doc1.QuerySelectorAll(".gallery-icon a"))
+                    {
+                        string url = item1.GetAttribute("href")!;
+                        offerModels.Add(new OfferModel
+                        {
+                            Id = await GetHash(url),
+                            DueDate = dueDate,
+                            Market = OfferRepository.MarketToInteger(Enums.Market.DELTA),
+                            OfferGroup = id,
+                            PageOrder = counter,
+                            Type = 1,
+                            Url = url
+                        });
+                        pages.Add(url);
+                        counter++;
+                    }
+                    offers.Add(new GetOffersResponseDto
+                    {
+                        Pages = pages,
+                        DueDate = date,
+                        Type = "image",
+                        OfferGroup = id
+                    });
+                }
+
+                foreach (var item in offerModels)
+                {
+                    await _repository.InsertOffer(true, item);
+                }
+
+                Preferences.Default.Set("last_delta", DateTime.Now);
+                return offers;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+        else
+        {
+            var offerModels = await _repository.GetOffersByMarket(Enums.Market.DELTA);
+            List<GetOffersResponseDto> offers = [];
+            foreach (var item in offerModels)
+            {
+                offers.Add(new GetOffersResponseDto
+                {
+                    DueDate = DateTime.Parse(item.DueDate),
+                    Type = item.Type == 0 ? "pdf" : "image",
+                    OfferGroup = item.OfferGroup!,
                     Pages = [.. item.Url.Split(',')]
                 });
             }

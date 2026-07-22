@@ -1,11 +1,11 @@
 ﻿using MauiNativePdfView;
-using Microsoft.Extensions.Logging;
 using OffersDelivery.Core;
 using OffersDelivery.Core.Repositories;
 using System.Net;
 using System.Net.Security;
 using CommunityToolkit.Maui;
 using OffersDelivery.Core.Services;
+using Microsoft.Extensions.Logging;
 
 namespace OffersDelivery
 {

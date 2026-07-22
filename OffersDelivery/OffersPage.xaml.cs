@@ -1,6 +1,3 @@
-using Android.Widget;
-using Java.Nio;
-using Java.Nio.FileNio.Attributes;
 using MauiNativePdfView.Abstractions;
 using OffersDelivery.Core;
 using OffersDelivery.Core.Dtos;

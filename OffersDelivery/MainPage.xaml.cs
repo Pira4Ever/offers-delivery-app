@@ -1,6 +1,4 @@
-﻿using OffersDelivery.Core;
-using OffersDelivery.ViewModels;
-using System.Windows.Input;
+﻿using OffersDelivery.ViewModels;
 
 namespace OffersDelivery;
 
