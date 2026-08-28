@@ -38,11 +38,13 @@ namespace OffersDelivery
                     {
                         await Task.Delay(2000);
 
+                        var page = Windows[0].Page;
+
                         bool userAgreed = await MainThread.InvokeOnMainThreadAsync(async () =>
                         {
-                            if (Windows[0].Page != null)
+                            if (page != null)
                             {
-                                return await Windows[0].Page!.DisplayAlertAsync(
+                                return await page.DisplayAlertAsync(
                                     "Atualização disponível",
                                     "Uma nova versão do aplicativo está disponível. Deseja atualizar agora?",
                                     "Atualizar",
@@ -54,6 +56,16 @@ namespace OffersDelivery
 
                         if (userAgreed)
                         {
+                            await MainThread.InvokeOnMainThreadAsync(async () =>
+                            {
+                                if (page != null)
+                                {
+                                    if (page is MainPage mainPage)
+                                    {
+                                        mainPage.ChangeLoading();
+                                    }
+                                }
+                            });
                             await _updateService.DownloadAndInstallUpdateAsync("https://github.com/Pira4Ever/offers-delivery-app/releases/latest/download/OffersDelivery.apk");
                         }
                     }

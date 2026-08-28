@@ -8,7 +8,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace OffersDelivery.Core;
@@ -63,59 +62,45 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
         {
             try
             {
-                var resp = await _httpClient.GetAsync(@"https://roldao.com.br/ofertas-do-roldao/");
+                var resp = await _httpClient.GetAsync(@"https://roldao.com.br/ofertas/");
                 var statusCode = resp.StatusCode;
                 var html = await resp.Content.ReadAsStringAsync();
                 var context = BrowsingContext.New(Configuration.Default);
                 var doc = await context.OpenAsync(req => req.Content(html));
-                var divs = doc.QuerySelectorAll(".post-item.isotope-item");
+                var divs = doc.QuerySelectorAll("#ofertasnow > div > div > div .jet-listing-grid__item[data-post-id]");
 
                 List<GetOffersResponseDto> offers = [];
                 List<OfferModel> offerModels = [];
 
                 foreach (var item in divs)
                 {
-                    var text = item.QuerySelector(".post-excerpt")?.TextContent.ToLower()!;
-                    if (!(text.Contains("salto") && text.Contains("exceto")))
+                    var postId = item.GetAttribute("data-post-id");
+                    var response = await _httpClient.PostAsync("https://roldao.com.br/wp-admin/admin-ajax.php", new FormUrlEncodedContent(new Dictionary<string, string>
+                        {
+                            { "action", "elem_get_pdf_oferta_iframe" },
+                            { "post_id", postId! }
+                        }));
+
+                    var jsonResp = await response.Content.ReadFromJsonAsync<RoldaoApiResponse>();
+
+                    var dueDate = DateTime.ParseExact(item.QuerySelector(".periodo-oferta")!.TextContent.Split(" a ")[1], "dd.MM", CultureInfo.InvariantCulture);
+                    dueDate = dueDate < DateTime.Today ? dueDate.AddYears(1) : dueDate;
+
+                    offers.Add(new GetOffersResponseDto
                     {
-                        var link = item.QuerySelector(".post-title")!.QuerySelector("a")!.GetAttribute("href");
+                        DueDate = dueDate,
+                        Type = "pdf",
+                        Url = jsonResp!.Data.Url
+                    });
 
-                        var response = await _httpClient.GetAsync(link);
-                        var statusCode1 = response.StatusCode;
-                        var html1 = await response.Content.ReadAsStringAsync();
-                        var pdfDoc = await context.OpenAsync(req => req.Content(html1));
-                        string encodedJson;
-                        try
-                        {
-                            encodedJson = pdfDoc.QuerySelector("#real3d_flipbook_embed-js-extra")!.InnerHtml!.Split("= \"")[1].Split("\";")[0];
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-                        var json = encodedJson.Replace("\\", "");
-
-                        var dueDate = DateRegex().Matches(text)[0].Value;
-                        var date = DateTime.ParseExact(dueDate, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None);
-
-                        JsonNode dom = JsonNode.Parse(json)!;
-                        var pdfLink = dom["pdfUrl"]?.GetValue<string>();
-                        offers.Add(new GetOffersResponseDto
-                        {
-                            DueDate = date,
-                            Type = "pdf",
-                            Url = pdfLink!
-                        });
-
-                        offerModels.Add(new OfferModel
-                        {
-                            DueDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                            Market = OfferRepository.MarketToInteger(Enums.Market.ROLDAO),
-                            Url = pdfLink!,
-                            Type = 0,
-                            Id = await GetHash(pdfLink!)
-                        });
-                    }
+                    offerModels.Add(new OfferModel
+                    {
+                        DueDate = dueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        Market = OfferRepository.MarketToInteger(Enums.Market.ROLDAO),
+                        Url = jsonResp!.Data.Url,
+                        Type = 0,
+                        Id = await GetHash(jsonResp!.Data.Url)
+                    });
                 }
 
                 foreach (var item in offerModels)

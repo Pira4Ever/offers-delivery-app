@@ -18,4 +18,7 @@ public partial class MainPage : ContentPage
             viewModel.LoadMarketsCommand.Execute(null);
         }
     }
+
+    public void ChangeLoading() => LoadingOverlay.IsVisible = true;
+
 }
