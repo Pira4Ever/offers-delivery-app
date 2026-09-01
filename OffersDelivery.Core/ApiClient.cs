@@ -1,5 +1,6 @@
 ﻿using AngleSharp;
 using LaYumba.Functional;
+using Microsoft.VisualBasic;
 using OffersDelivery.Core.Dtos;
 using OffersDelivery.Core.Models;
 using OffersDelivery.Core.Repositories;
@@ -24,6 +25,7 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
         markets.Add(new GetMarketsResponseDto { EncodedName = "PAGUE_MENOS", Name = "Pague Menos", Url = "pague_menos.jpg" });
         markets.Add(new GetMarketsResponseDto { EncodedName = "TENDA", Name = "Tenda Atacado", Url = "tenda.png" });
         markets.Add(new GetMarketsResponseDto { EncodedName = "DELTA", Name = "Delta Supermercados", Url = "delta.png" });
+        markets.Add(new GetMarketsResponseDto { EncodedName = "SAO_ROQUE", Name = "São Roque Supermercados", Url = "sao_roque.jpg" });
         return markets;
     }
 
@@ -51,6 +53,10 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                             Exception: ex => throw ex,
                             Success: response => response
                             ),
+            "SAO_ROQUE" => (await ScrapSaoRoque()).Match(
+                            Exception: ex => throw ex,
+                            Success: response => response
+                            ),
             _ => [],
         };
     }
@@ -63,7 +69,6 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
             try
             {
                 var resp = await _httpClient.GetAsync(@"https://roldao.com.br/ofertas/");
-                var statusCode = resp.StatusCode;
                 var html = await resp.Content.ReadAsStringAsync();
                 var context = BrowsingContext.New(Configuration.Default);
                 var doc = await context.OpenAsync(req => req.Content(html));
@@ -369,7 +374,7 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                         dueDate = regex[0].Value;
                         date = DateTime.ParseExact(dueDate, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None);
                     }
-                    
+
                     dueDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                     var link = item.GetElementsByTagName("a")[0].GetAttribute("href")!;
 
@@ -437,6 +442,71 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
         }
     }
 
+    private async Task<Exceptional<List<GetOffersResponseDto>>> ScrapSaoRoque()
+    {
+        var lastUpdate = Preferences.Default.Get("last_sao_roque", DateTime.Now.AddHours(-2));
+        if (DateTime.Now >= lastUpdate.AddHours(1) && Connectivity.Current.NetworkAccess == Microsoft.Maui.Networking.NetworkAccess.Internet)
+        {
+            var resp = await _httpClient.GetAsync(@"https://www.smsr.com.br/sr/ofertas/");
+            var html = await resp.Content.ReadAsStringAsync();
+            var context = BrowsingContext.New(Configuration.Default);
+            var doc = await context.OpenAsync(req => req.Content(html));
+            var anchors = doc.QuerySelectorAll(".gallery-item a");
+
+            List<GetOffersResponseDto> offers = [];
+            List<OfferModel> offerModels = [];
+
+            foreach (var anchor in anchors)
+            {
+                string id = Guid.NewGuid().ToString();
+                List<string> pages = [];
+                offerModels.Add(new OfferModel
+                {
+                    Id = await GetHash(anchor.GetAttribute("href")!),
+                    DueDate = DateTime.Now.AddDays(5).Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Market = OfferRepository.MarketToInteger(Enums.Market.SAO_ROQUE),
+                    OfferGroup = id,
+                    PageOrder = 1,
+                    Type = 1,
+                    Url = anchor.GetAttribute("href")!
+                });
+                pages.Add(anchor.GetAttribute("href")!);
+
+                offers.Add(new GetOffersResponseDto
+                {
+                    Pages = pages,
+                    DueDate = DateTime.Now.AddDays(5).Date,
+                    Type = "image",
+                    OfferGroup = id
+                });
+            }
+
+            foreach (var item in offerModels)
+            {
+                await _repository.InsertOffer(true, item);
+            }
+            Preferences.Default.Set("last_sao_roque", DateTime.Now);
+            return offers;
+        }
+        else
+        {
+            var offerModels = await _repository.GetOffersByMarket(Enums.Market.SAO_ROQUE);
+            List<GetOffersResponseDto> offers = [];
+            foreach (var item in offerModels)
+            {
+                offers.Add(new GetOffersResponseDto
+                {
+                    DueDate = DateTime.Parse(item.DueDate),
+                    Type = item.Type == 0 ? "pdf" : "image",
+                    OfferGroup = item.OfferGroup!,
+                    Pages = [.. item.Url.Split(',')]
+                });
+            }
+
+            return offers;
+        }
+    }
+
     private async Task<string> GetHash(string url)
     {
         using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
@@ -458,7 +528,7 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
             if (offer.Type == 0)
             {
                 string fileName = HashUrl(offer.Url) + ".pdf";
-                path = Path.Combine(FileSystem.CacheDirectory, fileName);
+                path = Path.Combine(Microsoft.Maui.Storage.FileSystem.CacheDirectory, fileName);
             }
             else
             {
@@ -469,7 +539,7 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                     extension = ".jpg";
 
                 var fileName = $"{hash}{extension}";
-                path = Path.Combine(FileSystem.CacheDirectory, fileName);
+                path = Path.Combine(Microsoft.Maui.Storage.FileSystem.CacheDirectory, fileName);
             }
             File.Delete(path);
         }

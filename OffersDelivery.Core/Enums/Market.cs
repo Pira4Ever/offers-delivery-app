@@ -6,5 +6,6 @@ public enum Market
     PAGUE_MENOS = 1,
     SAO_VICENTE = 2,
     TENDA = 3,
-    DELTA = 4
+    DELTA = 4,
+    SAO_ROQUE = 5
 }

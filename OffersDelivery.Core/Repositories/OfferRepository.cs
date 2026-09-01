@@ -25,6 +25,7 @@ public class OfferRepository
             Market.SAO_VICENTE => 2,
             Market.TENDA => 3,
             Market.DELTA => 4,
+            Market.SAO_ROQUE => 5,
             _ => throw new NotImplementedException()
         };
     }
@@ -33,7 +34,7 @@ public class OfferRepository
     {
         await Init();
         string query;
-        if (market == Market.TENDA)
+        if (market == Market.TENDA || market == Market.SAO_ROQUE)
             query = "SELECT Market, OfferGroup, DueDate, Type, GROUP_CONCAT(Url, ',') AS Url FROM (SELECT OfferGroup, DueDate, Url, Market, Type FROM Offers WHERE Market = ? AND Type = 1 ORDER BY PageOrder ASC) GROUP BY OfferGroup, DueDate ORDER BY DueDate DESC;";
         else
             query = "SELECT Type, Url, DueDate FROM Offers WHERE Market = ?;";
