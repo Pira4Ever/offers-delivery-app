@@ -1,0 +1,114 @@
+name: MAUI CI/CD
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+      runs-on: windows-latest
+      steps:
+      - uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui
+
+      - name: Extract version from csproj
+        id: version
+        shell: pwsh
+        run: |
+          $csprojPath = "OffersDelivery/OffersDelivery.csproj"
+          
+          if (-not (Test-Path $csprojPath)) {
+            Write-Error "Arquivo não encontrado: $csprojPath"
+            exit 1
+          }
+  
+          Write-Host "Lendo versão de: $csprojPath"
+          $xml = [xml](Get-Content $csprojPath)
+  
+          $version = $xml.Project.PropertyGroup.ApplicationDisplayVersion | 
+                     Where-Object { $_ -and $_.Trim() -ne "" } | 
+                     Select-Object -First 1
+  
+          if (-not $version) {
+            Write-Error "ApplicationDisplayVersion não encontrada no arquivo $csprojPath"
+            exit 1
+          }
+  
+          $version = $version.Trim()
+          Write-Host "Versão encontrada: $version"
+  
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Decode Keystore
+        shell: pwsh
+        run: |
+          $keystorePath = "$env:GITHUB_WORKSPACE\OffersDelivery\pira-android.keystore"
+          $bytes = [Convert]::FromBase64String("${{ secrets.ANDROID_KEYSTORE_BASE64 }}")
+          [IO.File]::WriteAllBytes($keystorePath, $bytes)
+          Write-Host "Keystore criado em: $keystorePath"
+
+      - name: Build
+        run: dotnet publish -f net10.0-android -c Release -p:AndroidKeyStore=true -p:AndroidSigningKeyStore=pira-android.keystore -p:AndroidSigningKeyAlias=pira-android -p:AndroidSigningKeyPass="${{ secrets.KEYSTORE_PASSWORD }}" -p:AndroidSigningStorePass="${{ secrets.KEYSTORE_PASSWORD_ALIAS }}"
+
+      - name: Prepare release files
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          # Encontra o APK gerado
+          $apk = Get-ChildItem -Recurse -Filter *.apk | 
+                 Where-Object { $_.FullName -match 'publish|Release' } | 
+                 Select-Object -First 1
+  
+          if (-not $apk) {
+            Write-Error "APK não encontrado após o publish"
+            Get-ChildItem -Recurse -Filter *.apk | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+  
+          Write-Host "APK encontrado: $($apk.FullName)"
+  
+          # Cria pasta de release limpa
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+  
+          # Copia o APK
+          Copy-Item $apk.FullName -Destination "release/OffersDelivery.apk" -Force
+  
+          # Cria version.txt
+          $version = "${{ steps.version.outputs.VERSION }}"
+          Set-Content -Path "release/version.txt" -Value $version -NoNewline
+          Write-Host "version.txt criado com: $version"
+  
+          Get-ChildItem release | ForEach-Object { Write-Host $_.Name }
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}.0
+          name: Offers Delivery ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Release automática
+            
+            - **Versão**: `${{ steps.version.outputs.VERSION }}`
+            - **Commit**: ${{ github.sha }}
+            
+            Arquivos incluídos:
+            - APK do aplicativo
+            - `version.txt` (contém o número da versão)
+          files: |
+            release/*.apk
+            release/version.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
