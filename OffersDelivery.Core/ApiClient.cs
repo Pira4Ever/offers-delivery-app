@@ -87,8 +87,16 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                         }));
 
                     var jsonResp = await response.Content.ReadFromJsonAsync<RoldaoApiResponse>();
-
-                    var dueDate = DateTime.ParseExact(item.QuerySelector(".periodo-oferta")!.TextContent.Split(" a ")[1], "dd.MM", CultureInfo.InvariantCulture);
+                    string dateString;
+                    try
+                    {
+                        dateString = item.QuerySelector(".periodo-oferta")!.TextContent.Split(" a ")[1];
+                    }
+                    catch (IndexOutOfRangeException)
+                    {
+                        dateString = item.QuerySelector(".periodo-oferta")!.TextContent;
+                    }
+                    var dueDate = DateTime.ParseExact(dateString, "dd.MM", CultureInfo.InvariantCulture);
                     dueDate = dueDate < DateTime.Today ? dueDate.AddYears(1) : dueDate;
 
                     offers.Add(new GetOffersResponseDto
