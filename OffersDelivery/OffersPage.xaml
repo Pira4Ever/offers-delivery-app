@@ -21,25 +21,31 @@
             EnableAnnotationRendering="True"
             IsVisible="False"/>
 
-        <CollectionView
-        x:Name="imageViewer"
-        IsVisible="False"
-        ItemsLayout="VerticalList">
+        <ScrollView 
+            x:Name="ZoomScrollView"
+            Orientation="Both"
+            HorizontalScrollBarVisibility="Never"
+            VerticalScrollBarVisibility="Never"
+            IsVisible="False">
 
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
+            <Grid x:Name="ZoomContainer" HorizontalOptions="Start" VerticalOptions="Start">
 
-                    <Image
-                    Margin="0,0,0,10"
-                    Aspect="AspectFit"
-                    Source="{Binding}">
-                    </Image>
+                <CollectionView
+            x:Name="imageViewer"
+            ItemsLayout="VerticalList">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Image
+                        Margin="0,0,0,10"
+                        Aspect="AspectFit"
+                        Source="{Binding}">
+                            </Image>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
 
-
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-
-        </CollectionView>
+            </Grid>
+        </ScrollView>
 
         <Grid x:Name="LoadingOverlay" 
           BackgroundColor="#80000000"

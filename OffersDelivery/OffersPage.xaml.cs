@@ -18,6 +18,14 @@ public partial class OffersPage : ContentPage
     private List<GetOffersResponseDto>? offers;
     private readonly HttpClient client;
     private int index = 0;
+    private double currentScale = 1.0;
+    private const double ZoomStep = 0.2;
+    private const double MaxZoom = 3.0;
+    private const double MinZoom = 1.0;
+
+    private double originalWidth = 0;
+    private double originalHeight = 0;
+    private int pageCount = 1;
 
     public string EncodedName
     {
@@ -57,6 +65,13 @@ public partial class OffersPage : ContentPage
         };
         client = new HttpClient(handler);
         _apiClient = apiClient;
+        ZoomScrollView.SizeChanged += (s, e) =>
+        {
+            if (currentScale == 1.0)
+            {
+                ApplyZoom();
+            }
+        };
     }
 
     private async void OnPreviousPage(object sender, EventArgs e)
@@ -69,6 +84,8 @@ public partial class OffersPage : ContentPage
 
     private async void OnNextPage(object sender, EventArgs e)
     {
+        originalWidth = ZoomScrollView.Width;
+        originalHeight = ZoomScrollView.Height;
         if (offers!.Count == 1) return;
         index++;
         if (index > offers!.Count - 1) index = 0;
@@ -86,15 +103,20 @@ public partial class OffersPage : ContentPage
             pdfViewer.Reload();
             pdfViewer.GoToPage(0);
             pdfViewer.IsVisible = true;
-            imageViewer.IsVisible = false;
+            ZoomScrollView.IsVisible = false;
         }
         else if (offers![index].Type == "image")
         {
             List<string> sources = [];
             foreach (var image in offers![index].Pages) sources.Add(await GetImageFromCacheAsync(image));
+            pageCount = sources.Count;
             imageViewer.ItemsSource = sources;
             pdfViewer.IsVisible = false;
-            imageViewer.IsVisible = true;
+            ZoomScrollView.IsVisible = true;
+            currentScale = 1.0;
+            originalHeight = 0;
+            originalWidth = 0;
+            ApplyZoom();
         }
         LoadingOverlay.IsVisible = false;
         Controls.IsVisible = true;
@@ -102,12 +124,53 @@ public partial class OffersPage : ContentPage
 
     private void OnZoomIn(object sender, EventArgs e)
     {
-        pdfViewer.Zoom = Math.Min(pdfViewer.Zoom + 0.5f, pdfViewer.MaxZoom);
+        if (pdfViewer.IsVisible)
+            pdfViewer.Zoom = Math.Min(pdfViewer.Zoom + 0.5f, pdfViewer.MaxZoom);
+        else
+            if (currentScale < MaxZoom)
+            {
+                currentScale += ZoomStep;
+                ApplyZoom();
+            }
     }
 
     private void OnZoomOut(object sender, EventArgs e)
     {
-        pdfViewer.Zoom = Math.Max(pdfViewer.Zoom - 0.5f, pdfViewer.MinZoom);
+        if (pdfViewer.IsVisible)
+            pdfViewer.Zoom = Math.Max(pdfViewer.Zoom - 0.5f, pdfViewer.MinZoom);
+        else
+            if (currentScale > MinZoom)
+            {
+                currentScale -= ZoomStep;
+                ApplyZoom();
+            }
+    }
+
+    private void ApplyZoom()
+    {
+        ZoomContainer.AnchorX = 0;
+        ZoomContainer.AnchorY = 0;
+        ZoomContainer.Scale = currentScale;
+
+        if (originalWidth == 0)
+        {
+            originalWidth = ZoomScrollView.Width;
+            originalHeight = ZoomScrollView.Height;
+        }
+
+        if (currentScale > 1.0)
+        {
+            ZoomContainer.WidthRequest = originalWidth * currentScale;
+            ZoomContainer.HeightRequest = originalHeight * currentScale * ((pageCount == 1) ? 1 : 1.75);
+        }
+        else
+        {
+            ZoomContainer.WidthRequest = originalWidth;
+            ZoomContainer.HeightRequest = originalHeight;
+        }
+
+        Console.WriteLine(ZoomContainer.Height);
+        Console.WriteLine(ZoomContainer.HeightRequest);
     }
 
     private async Task<byte[]> GetPdfFromCacheAsync(string url)
@@ -167,15 +230,16 @@ public partial class OffersPage : ContentPage
                     pdfViewer.Source = PdfSource.FromBytes(bytes);
                     pdfViewer.Reload();
                     pdfViewer.IsVisible = true;
-                    imageViewer.IsVisible = false;
+                    ZoomScrollView.IsVisible = false;
                 }
                 else if (offers![0].Type == "image")
                 {
                     List<string> sources = [];
                     foreach (var image in offers![0].Pages) sources.Add(await GetImageFromCacheAsync(image));
+                    pageCount = sources.Count;
                     imageViewer.ItemsSource = sources;
                     pdfViewer.IsVisible = false;
-                    imageViewer.IsVisible = true;
+                    ZoomScrollView.IsVisible = true;
                 }
             }
         }
