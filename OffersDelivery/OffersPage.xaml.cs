@@ -64,27 +64,7 @@ public partial class OffersPage : ContentPage
         if (offers!.Count == 1) return;
         index--;
         if (index < 0) index = offers!.Count - 1;
-        LoadingOverlay.IsVisible = true;
-        Controls.IsVisible = false;
-        if (offers![index].Type == "pdf")
-        {
-            var bytes = await GetPdfFromCacheAsync(offers![index].Url);
-            pdfViewer.Source = PdfSource.FromBytes(bytes);
-            pdfViewer.Reload();
-            pdfViewer.GoToPage(0);
-            pdfViewer.IsVisible = true;
-            imageViewer.IsVisible = false;
-        }
-        else if (offers![index].Type == "image")
-        {
-            List<string> sources = [];
-            foreach (var image in offers![index].Pages) sources.Add(await GetImageFromCacheAsync(image));
-            imageViewer.ItemsSource = sources;
-            pdfViewer.IsVisible = false;
-            imageViewer.IsVisible = true;
-        }
-        LoadingOverlay.IsVisible = false;
-        Controls.IsVisible = true;
+        ChangePage();
     }
 
     private async void OnNextPage(object sender, EventArgs e)
@@ -92,6 +72,11 @@ public partial class OffersPage : ContentPage
         if (offers!.Count == 1) return;
         index++;
         if (index > offers!.Count - 1) index = 0;
+        ChangePage();
+    }
+
+    private async void ChangePage()
+    {
         LoadingOverlay.IsVisible = true;
         Controls.IsVisible = false;
         if (offers![index].Type == "pdf")
