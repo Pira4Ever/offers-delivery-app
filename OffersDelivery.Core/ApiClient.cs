@@ -1,5 +1,6 @@
 ﻿using AngleSharp;
 using LaYumba.Functional;
+using Microsoft.VisualBasic;
 using OffersDelivery.Core.Dtos;
 using OffersDelivery.Core.Models;
 using OffersDelivery.Core.Repositories;
@@ -74,53 +75,75 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                 var divs = doc.QuerySelectorAll("#ofertasnow > div > div > div .jet-listing-grid__item[data-post-id]");
 
                 List<GetOffersResponseDto> offers = [];
-                List<OfferModel> offerModels = [];
-
-                foreach (var item in divs)
+                var semaphore = new SemaphoreSlim(10);
+                var tasks = divs.Select(async item =>
                 {
-                    var postId = item.GetAttribute("data-post-id");
-                    var response = await _httpClient.PostAsync("https://roldao.com.br/wp-admin/admin-ajax.php", new FormUrlEncodedContent(new Dictionary<string, string>
-                        {
-                            { "action", "elem_get_pdf_oferta_iframe" },
-                            { "post_id", postId! }
-                        }));
-
-                    var jsonResp = await response.Content.ReadFromJsonAsync<RoldaoApiResponse>();
-                    DateTime dueDate;
+                    await semaphore.WaitAsync();
                     try
                     {
-                        dueDate = DateTime.ParseExact(item.QuerySelector(".periodo-oferta")!.TextContent.Split(" a ")[1], "dd.MM", CultureInfo.InvariantCulture);
-                    }
-                    catch (IndexOutOfRangeException)
-                    {
-                        dueDate = DateTime.ParseExact(item.QuerySelector(".periodo-oferta")!.TextContent, "dd.MM", CultureInfo.InvariantCulture);
-                    }
-                    catch (Exception)
-                    {
-                        dueDate = DateTime.Now.AddDays(5);
-                    }
-                    dueDate = dueDate < DateTime.Today ? dueDate.AddYears(1) : dueDate;
+                        var postId = item.GetAttribute("data-post-id");
 
+                        var response = await _httpClient.PostAsync(
+                            "https://roldao.com.br/wp-admin/admin-ajax.php",
+                            new FormUrlEncodedContent(new Dictionary<string, string>
+                            {
+                                { "action", "elem_get_pdf_oferta_iframe" },
+                                { "post_id", postId! }
+                            }));
+
+                        var jsonResp = await response.Content.ReadFromJsonAsync<RoldaoApiResponse>();
+
+                        DateTime dueDate;
+                        try
+                        {
+                            dueDate = DateTime.ParseExact(
+                                item.QuerySelector(".periodo-oferta")!.TextContent.Split(" a ")[1],
+                                "dd.MM",
+                                CultureInfo.InvariantCulture);
+                        }
+                        catch (IndexOutOfRangeException)
+                        {
+                            dueDate = DateTime.ParseExact(
+                                item.QuerySelector(".periodo-oferta")!.TextContent,
+                                "dd.MM",
+                                CultureInfo.InvariantCulture);
+                        }
+                        catch (Exception)
+                        {
+                            dueDate = DateTime.Now.AddDays(5);
+                        }
+
+                        dueDate = dueDate < DateTime.Today ? dueDate.AddYears(1) : dueDate;
+
+                        var hash = await GetHash(jsonResp!.Data.Url);
+
+                        return (dueDate, jsonResp.Data.Url, hash);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                });
+
+                var results = await Task.WhenAll(tasks);
+
+                foreach (var (dueDate, url, hash) in results)
+                {
                     offers.Add(new GetOffersResponseDto
                     {
                         DueDate = dueDate,
                         Type = "pdf",
-                        Url = jsonResp!.Data.Url
+                        Url = url
                     });
 
-                    offerModels.Add(new OfferModel
+                    await _repository.InsertOffer(false, new OfferModel
                     {
                         DueDate = dueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                         Market = OfferRepository.MarketToInteger(Enums.Market.ROLDAO),
-                        Url = jsonResp!.Data.Url,
+                        Url = url,
                         Type = 0,
-                        Id = await GetHash(jsonResp!.Data.Url)
+                        Id = hash
                     });
-                }
-
-                foreach (var item in offerModels)
-                {
-                    await _repository.InsertOffer(false, item);
                 }
                 Preferences.Default.Set("last_roldao", DateTime.Now);
                 return offers;
@@ -162,28 +185,38 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                 var doc = await context.OpenAsync(req => req.Content(html));
                 var anchors = doc.QuerySelectorAll("#Salto .viewFlyer__imageContainer.img_desktop a.is__desktop");
                 List<GetOffersResponseDto> offers = [];
-                List<OfferModel> offerModels = [];
-                foreach (var item in anchors)
+                var semaphore = new SemaphoreSlim(10);
+                var tasks = anchors.Select(async item =>
                 {
-                    var pdfLink = $"https://www.svicente.com.br{item.GetAttribute("href")!}";
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        var pdfLink = $"https://www.svicente.com.br{item.GetAttribute("href")!}";
+                        return (DateTime.Now.AddDays(5).Date, pdfLink, await GetHash(pdfLink));
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                });
+                var results = await Task.WhenAll(tasks);
+
+                foreach (var (dueDate, url, hash) in results)
+                {
                     offers.Add(new GetOffersResponseDto
                     {
-                        DueDate = DateTime.Now.AddDays(5).Date,
+                        DueDate = dueDate,
                         Type = "pdf",
-                        Url = pdfLink!
+                        Url = url
                     });
-                    offerModels.Add(new OfferModel
+                    await _repository.InsertOffer(false, new OfferModel
                     {
-                        DueDate = DateTime.Now.AddDays(5).Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        DueDate = dueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                         Market = OfferRepository.MarketToInteger(Enums.Market.SAO_VICENTE),
-                        Url = pdfLink!,
+                        Url = url,
                         Type = 0,
-                        Id = await GetHash(pdfLink!)
+                        Id = hash
                     });
-                }
-                foreach (var item in offerModels)
-                {
-                    await _repository.InsertOffer(false, item);
                 }
                 Preferences.Default.Set("last_sao_vicente", DateTime.Now);
                 return offers;
@@ -227,34 +260,49 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
 
                 List<GetOffersResponseDto> offers = [];
                 List<OfferModel> offerModels = [];
-                foreach (var banner in banners)
+                var semaphore = new SemaphoreSlim(10);
+                var tasks = banners.Select(async banner =>
                 {
-                    if (banner is null) continue;
-                    if (banner.ParentElement!.GetAttribute("data-cidade")!.Contains("Salto - Loja 29"))
+                    await semaphore.WaitAsync();
+                    try
                     {
-                        var anchors = banner.GetElementsByTagName("a");
-                        if (anchors.Count < 1) continue;
-                        var link = anchors[0].GetAttribute("href");
-                        if (link!.StartsWith('/')) link = "https://www.superpaguemenos.com.br" + link;
-                        offers.Add(new GetOffersResponseDto
+                        if (banner is not null && banner.ParentElement!.GetAttribute("data-cidade")!.Contains("Salto - Loja 29"))
                         {
-                            DueDate = DateTime.Now.AddDays(5).Date,
-                            Type = "pdf",
-                            Url = link!,
-                        });
-                        offerModels.Add(new OfferModel
-                        {
-                            DueDate = DateTime.Now.AddDays(5).Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                            Market = OfferRepository.MarketToInteger(Enums.Market.PAGUE_MENOS),
-                            Url = link!,
-                            Type = 0,
-                            Id = await GetHash(link!)
-                        });
+                            var anchors = banner.GetElementsByTagName("a");
+                            if (anchors.Count >= 1)
+                            {
+                                var link = anchors[0].GetAttribute("href");
+                                if (link!.StartsWith('/')) link = "https://www.superpaguemenos.com.br" + link;
+                                return (DateTime.Now.AddDays(5).Date, link, await GetHash(link));
+                            }
+                        }
+
+                        return (DateTime.Now.AddDays(5).Date, "", "");
                     }
-                }
-                foreach (var item in offerModels)
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                });
+                var results = await Task.WhenAll(tasks);
+
+                foreach (var (dueDate, url, hash) in results)
                 {
-                    await _repository.InsertOffer(false, item);
+                    if (url == "" || hash == "") continue;
+                    offers.Add(new GetOffersResponseDto
+                    {
+                        DueDate = dueDate,
+                        Type = "pdf",
+                        Url = url
+                    });
+                    await _repository.InsertOffer(false, new OfferModel
+                    {
+                        DueDate = dueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        Market = OfferRepository.MarketToInteger(Enums.Market.PAGUE_MENOS),
+                        Url = url,
+                        Type = 0,
+                        Id = hash
+                    });
                 }
                 Preferences.Default.Set("last_pague_menos", DateTime.Now);
                 return offers;
@@ -301,19 +349,35 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
                         string id = Guid.NewGuid().ToString();
                         List<string> pages = [];
 
-                        foreach (var page in item.Pages)
+                        var semaphore = new SemaphoreSlim(10);
+                        var tasks = item.Pages.Select(async page =>
                         {
-                            offerModels.Add(new OfferModel
+                            await semaphore.WaitAsync();
+                            try
                             {
-                                Id = await GetHash(page.Image!),
-                                DueDate = DateTime.ParseExact(item.EndDate.Replace('-', '/'), "yyyy/MM/dd", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                                Market = OfferRepository.MarketToInteger(Enums.Market.TENDA),
-                                OfferGroup = id,
-                                PageOrder = page.Order,
-                                Type = 1,
-                                Url = page.Image!
-                            });
-                            pages.Add(page.Image!);
+                                var offer = new OfferModel
+                                {
+                                    Id = await GetHash(page.Image!),
+                                    DueDate = DateTime.ParseExact(item.EndDate.Replace('-', '/'), "yyyy/MM/dd", CultureInfo.InvariantCulture, DateTimeStyles.None).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                                    Market = OfferRepository.MarketToInteger(Enums.Market.TENDA),
+                                    OfferGroup = id,
+                                    PageOrder = page.Order,
+                                    Type = 1,
+                                    Url = page.Image!
+                                };
+
+                                return offer;
+                            }
+                            finally
+                            {
+                                semaphore.Release();
+                            }
+                        });
+
+                        var results = await Task.WhenAll(tasks);
+                        foreach (var offer in results)
+                        {
+                            pages.Add(offer.Url);
                         }
 
                         offers.Add(new GetOffersResponseDto
@@ -464,37 +528,49 @@ public partial class ApiClient(HttpClient httpClient, OfferRepository repository
             var anchors = doc.QuerySelectorAll(".gallery-item a");
 
             List<GetOffersResponseDto> offers = [];
-            List<OfferModel> offerModels = [];
-
-            foreach (var anchor in anchors)
+            var semaphore = new SemaphoreSlim(10);
+            var tasks = anchors.Select(async anchor =>
             {
-                string id = Guid.NewGuid().ToString();
-                List<string> pages = [];
-                offerModels.Add(new OfferModel
+                await semaphore.WaitAsync();
+                try
                 {
-                    Id = await GetHash(anchor.GetAttribute("href")!),
+                    string id = Guid.NewGuid().ToString();
+                    string hash = await GetHash(anchor.GetAttribute("href")!);
+                    List<string> pages = [];
+                    pages.Add(anchor.GetAttribute("href")!);
+
+                    offers.Add(new GetOffersResponseDto
+                    {
+                        Pages = pages,
+                        DueDate = DateTime.Now.AddDays(5).Date,
+                        Type = "image",
+                        OfferGroup = id
+                    });
+
+                    return (id, await GetHash(anchor.GetAttribute("href")!), anchor.GetAttribute("href")!);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+
+            foreach (var (offerGroup, hash, url) in results)
+            {
+                await _repository.InsertOffer(true, new OfferModel
+                {
+                    Id = hash,
                     DueDate = DateTime.Now.AddDays(5).Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     Market = OfferRepository.MarketToInteger(Enums.Market.SAO_ROQUE),
-                    OfferGroup = id,
+                    OfferGroup = offerGroup,
                     PageOrder = 1,
                     Type = 1,
-                    Url = anchor.GetAttribute("href")!
-                });
-                pages.Add(anchor.GetAttribute("href")!);
-
-                offers.Add(new GetOffersResponseDto
-                {
-                    Pages = pages,
-                    DueDate = DateTime.Now.AddDays(5).Date,
-                    Type = "image",
-                    OfferGroup = id
+                    Url = url
                 });
             }
 
-            foreach (var item in offerModels)
-            {
-                await _repository.InsertOffer(true, item);
-            }
             Preferences.Default.Set("last_sao_roque", DateTime.Now);
             return offers;
         }

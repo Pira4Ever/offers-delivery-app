@@ -161,7 +161,7 @@ public partial class OffersPage : ContentPage
         if (currentScale > 1.0)
         {
             ZoomContainer.WidthRequest = originalWidth * currentScale;
-            ZoomContainer.HeightRequest = originalHeight * currentScale * ((pageCount == 1) ? 1 : 1.75);
+            ZoomContainer.HeightRequest = originalHeight * currentScale * ((pageCount == 1) ? 1 : 1.75 * (pageCount - 1));
         }
         else
         {
